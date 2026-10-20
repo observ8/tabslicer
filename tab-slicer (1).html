@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tab Slicer</title>
+<style>
+  :root{
+    --bg:#0f0f0f; --panel:#191919; --panel2:#202020; --line:#2c2c2c;
+    --text:#ececec; --dim:#8a8a8a; --faint:#555;
+    --accent:#ff6a1f; --rec:#ff3b30; --ok:#4cd964;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text)}
+  body{font:14px/1.45 -apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;-webkit-user-select:none;user-select:none}
+  main{max-width:880px;margin:0 auto;padding:24px 16px 56px}
+  header{display:flex;align-items:baseline;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+  h1{margin:0;font-size:22px;letter-spacing:.14em;color:var(--accent);font-weight:800}
+  header span{color:var(--dim);font-size:12px;letter-spacing:.04em}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}
+
+  .deck{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:12px}
+  .label{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:600}
+
+  /* knobs */
+  .knobs{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:10px;align-items:end}
+  .knob{display:flex;flex-direction:column;align-items:center;gap:6px;cursor:ns-resize;touch-action:none}
+  .knob svg{display:block;width:100%;max-width:90px;height:auto;overflow:visible}
+  .knob.big svg{max-width:150px}
+  .knob .val{font-size:15px;color:var(--text)}
+  .knob.big .val{font-size:26px;font-weight:700;color:var(--accent)}
+  .knob .track{stroke:#2b2b2b}
+  .knob .arc{stroke:var(--accent)}
+  .knob .cap{fill:#262626;stroke:#3a3a3a}
+  .knob .ptr{stroke:var(--text)}
+  .knob:focus-visible{outline:none}
+  .knob:focus-visible .cap{stroke:var(--accent)}
+  .bpmcol{display:flex;flex-direction:column;align-items:center;gap:8px}
+
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .between{justify-content:space-between}
+  .sep{height:1px;background:var(--line);margin:16px 0}
+
+  button,select{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);
+    border-radius:8px;padding:8px 12px;cursor:pointer}
+  button:hover{border-color:#444}
+  button:disabled{opacity:.35;cursor:default}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{border:0;border-radius:0;border-right:1px solid var(--line);padding:8px 11px;background:var(--panel2);font-size:12.5px}
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:var(--accent);color:#111;font-weight:700}
+  .tog.on{background:#2b2b2b;border-color:var(--accent);color:var(--accent)}
+
+  .play{min-width:96px;font-weight:700}
+  .play.on{background:var(--ok);border-color:var(--ok);color:#0b0b0b}
+  .recbtn{min-width:96px;font-weight:700;color:var(--rec);border-color:#5a2420}
+  .recbtn.armed{animation:blink .5s steps(2) infinite;background:#3a1512}
+  .recbtn.on{background:var(--rec);border-color:var(--rec);color:#fff}
+  @keyframes blink{50%{opacity:.45}}
+  .status{color:var(--dim);font-size:12.5px;min-height:18px}
+  .status.rec{color:var(--rec)}
+
+  /* steps */
+  .steps{display:grid;grid-template-columns:repeat(16,1fr);gap:4px;margin-top:14px}
+  .steps i{height:10px;border-radius:3px;background:#242424}
+  .steps i:nth-child(4n+1){background:#2e2e2e}
+  .steps i.now{background:var(--c,#666)}
+
+  /* sources */
+  .srchead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap}
+  .add{background:var(--accent);color:#111;border-color:var(--accent);font-weight:700}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+  .src{position:relative;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 10px 12px;transition:border-color .06s,box-shadow .06s}
+  .src.on{border-color:var(--c);box-shadow:0 0 0 1px var(--c),0 0 18px -4px var(--c)}
+  .src .top{display:flex;align-items:center;gap:8px}
+  .src .dot{width:10px;height:10px;border-radius:50%;background:var(--c);flex:none}
+  .src input{flex:1;min-width:0;background:transparent;border:0;color:var(--text);font:inherit;font-weight:600;padding:2px 0;-webkit-user-select:text;user-select:text}
+  .src input:focus{outline:none;border-bottom:1px solid var(--line)}
+  .src .x{padding:2px 8px;border:0;background:transparent;color:var(--dim);font-size:16px}
+  .src .x:hover{color:var(--text)}
+  .src .m{height:5px;background:#141414;border-radius:3px;margin-top:9px;overflow:hidden}
+  .src .m b{display:block;height:100%;width:0;background:var(--c)}
+  .src .hits{font-size:11px;color:var(--dim);margin-top:6px}
+  .empty{color:var(--dim);font-size:13px;padding:14px;border:1px dashed var(--line);border-radius:10px;text-align:center}
+
+  /* takes */
+  .take{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+  .take:first-of-type{border-top:0}
+  .take audio{height:32px;flex:1;min-width:200px}
+  .take a{color:var(--accent);text-decoration:none;font-weight:600}
+  .take .meta{color:var(--dim);font-size:12px;min-width:150px}
+
+  details{color:var(--dim);font-size:13px;margin-top:4px}
+  details summary{cursor:pointer;color:var(--text)}
+  details ol{padding-left:20px;margin:8px 0 0}
+  details li{margin-bottom:5px}
+  kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;background:#222;border:1px solid #333;border-radius:4px;padding:0 5px;color:var(--text)}
+
+  .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#262626;border:1px solid #3a3a3a;
+    padding:10px 14px;border-radius:10px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw}
+  .toast.show{opacity:1}
+
+  /* youtube decks */
+  .urlbar{display:flex;gap:8px;margin-bottom:10px}
+  .urlbar input{flex:1;min-width:0;background:#141414;border:1px solid var(--line);border-radius:8px;color:var(--text);
+    font:inherit;padding:8px 10px;-webkit-user-select:text;user-select:text}
+  .urlbar input:focus{outline:none;border-color:#444}
+  .src.pending{border-style:dashed}
+  .src .st{font-size:11px;color:var(--dim);margin-top:6px}
+  .src .st.err{color:var(--rec)}
+  .src .connect{margin-top:9px;width:100%;background:var(--accent);color:#111;border-color:var(--accent);font-weight:700;padding:6px}
+  .banner{background:#2a1a10;border:1px solid #5a3218;color:#ffb98a;border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:10px}
+  .banner code{background:#1a0f08;padding:1px 5px;border-radius:4px}
+
+  /* deck page */
+  body.deckpage{height:100vh;display:flex;flex-direction:column;margin:0}
+  .deckbar{display:flex;gap:12px;align-items:baseline;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel)}
+  .deckbar b{color:var(--accent);letter-spacing:.12em}
+  .deckbar span{color:var(--dim);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .deckbar .hint{margin-left:auto;color:#ffb98a}
+  .deckwrap{flex:1;position:relative}
+  .deckwrap iframe,.deckwrap #player{position:absolute;inset:0;width:100%;height:100%;border:0}
+
+  @media (max-width:620px){
+    .knobs{grid-template-columns:1fr 1fr 1fr}
+    .bpmcol{grid-column:1/-1}
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>TAB SLICER</h1>
+    <span>Τυχαία κομμάτια από τα YouTube tabs σου, στο BPM σου</span>
+  </header>
+
+  <!-- CONTROLS -->
+  <section class="deck">
+    <div class="knobs">
+      <div class="bpmcol">
+        <div class="knob big" id="kBpm" tabindex="0"></div>
+        <div class="row" style="justify-content:center">
+          <button id="btnTap" title="Tap tempo (T)">TAP</button>
+        </div>
+      </div>
+      <div class="knob" id="kGate" tabindex="0"></div>
+      <div class="knob" id="kChange" tabindex="0"></div>
+      <div class="knob" id="kRest" tabindex="0"></div>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="row between">
+      <div class="row">
+        <span class="label">Κομμάτι</span>
+        <div class="seg" id="segDiv">
+          <button data-v="1">1 BAR</button><button data-v="2">1/2</button><button data-v="4">1/4</button><button data-v="8">1/8</button><button data-v="16">1/16</button>
+        </div>
+      </div>
+      <div class="row">
+        <button class="tog" id="btnClick" title="Μετρονόμος — ακούγεται αλλά δεν γράφεται">CLICK</button>
+        <button class="tog on" id="btnMon" title="Άκου το αποτέλεσμα">MONITOR</button>
+      </div>
+    </div>
+
+    <div class="steps" id="steps"></div>
+
+    <div class="sep"></div>
+
+    <div class="row between">
+      <div class="row">
+        <button class="play" id="btnPlay">▶ PLAY</button>
+        <button class="recbtn" id="btnRec">● REC</button>
+        <select id="selLen" title="Διάρκεια εγγραφής">
+          <option value="0">Ελεύθερα</option>
+          <option value="1">1 μέτρο</option>
+          <option value="2">2 μέτρα</option>
+          <option value="4">4 μέτρα</option>
+          <option value="8">8 μέτρα</option>
+          <option value="16">16 μέτρα</option>
+          <option value="32">32 μέτρα</option>
+        </select>
+      </div>
+      <div class="status mono" id="recStatus"></div>
+    </div>
+  </section>
+
+  <!-- SOURCES -->
+  <section class="deck">
+    <div class="srchead">
+      <span class="label">Πηγές (έως 8 tabs)</span>
+      <div class="row">
+        <label class="row" style="gap:6px;color:var(--dim);font-size:12.5px;cursor:pointer" title="Τα tabs σιγούν και ακούς μόνο το αποτέλεσμα. Ισχύει για tabs που προσθέτεις από εδώ και πέρα.">
+          <input type="checkbox" id="chkMute" checked> Σίγαση tabs
+        </label>
+        <button id="btnAdd" title="Tab που έχεις ήδη ανοιχτό (χωρίς αυτόματο play/pause)">+ Εξωτερικό tab</button>
+      </div>
+    </div>
+    <div id="fileBanner" class="banner" hidden>
+      Ανοιχτό ως αρχείο: το YouTube μπορεί να αρνηθεί να παίξει στα DECK (Error 153). Άνοιξέ το από
+      <b>GitHub Pages</b> ή από <code>http://localhost</code>. Οδηγίες στο «Πώς δουλεύει».
+    </div>
+    <div class="urlbar">
+      <input id="ytUrl" placeholder="Επικόλλησε YouTube link…" spellcheck="false" autocomplete="off">
+      <button class="add" id="btnOpen">Άνοιγμα</button>
+    </div>
+    <div id="srcGrid" class="grid"></div>
+  </section>
+
+  <!-- TAKES -->
+  <section class="deck">
+    <div class="label" style="margin-bottom:6px">Εγγραφές</div>
+    <div id="takes"><div class="status">Οι εγγραφές εμφανίζονται εδώ και κατεβαίνουν αυτόματα ως WAV.</div></div>
+  </section>
+
+  <details>
+    <summary>Πώς δουλεύει</summary>
+    <ol>
+      <li>Άνοιξε τη σελίδα στο <b>Google Chrome</b>.</li>
+      <li>Επικόλλησε ένα YouTube link και πάτα <b>Άνοιγμα</b>. Ανοίγει ένα νέο tab «DECK». Πάτα <b>▶ μία φορά</b> μέσα του (κανόνας του Chrome) και γύρνα εδώ.</li>
+      <li>Στην κάρτα του πάτα <b>Σύνδεση ήχου</b>, διάλεξε το tab «DECK …» και άφησε τσεκαρισμένο το «Also share tab audio». Επανέλαβε για κάθε βίντεο.</li>
+      <li><b>PLAY</b> / <b>REC</b>: πατιέται play σε όλα τα DECK. Η εγγραφή ξεκινά στο επόμενο μέτρο και κλείνει σε ακέραια μέτρα. Όταν τελειώσει, σταματούν όλα και τα DECK κάνουν pause.</li>
+      <li>Σύρε το WAV στο Ableton. Το όνομα του αρχείου έχει μέσα το BPM.</li>
+    </ol>
+    <p><b>+ Εξωτερικό tab</b>: για οποιοδήποτε tab έχεις ήδη ανοιχτό (κι εκτός YouTube). Αυτά τα πατάς play/pause εσύ.</p>
+    <p><b>Για να δουλεύουν τα DECK</b> η σελίδα πρέπει να ανοίγει από διεύθυνση και όχι ως αρχείο:<br>
+       • <b>GitHub Pages</b>: νέο public repo, ανέβασε το αρχείο ως <code>index.html</code>, Settings → Pages → Branch: main → Save.<br>
+       • <b>Τοπικά</b>: στο Terminal, μέσα στον φάκελο του αρχείου, <code>python3 -m http.server 8000</code> και άνοιξε <code>http://localhost:8000/tab-slicer.html</code>.</p>
+    <p><b>GATE</b>: πόσο από κάθε κομμάτι ακούγεται (100% = legato, χαμηλά = κοφτό/stutter).
+       <b>CHANGE</b>: πιθανότητα να αλλάξει πηγή σε κάθε κομμάτι.
+       <b>REST</b>: πιθανότητα για παύση (σιωπή).</p>
+    <p>Συντομεύσεις: <kbd>Space</kbd> play/stop · <kbd>R</kbd> rec · <kbd>T</kbd> tap · <kbd>↑</kbd><kbd>↓</kbd> στα knobs (Shift = λεπτό).</p>
+  </details>
+</main>
+<div class="toast" id="toast"></div>
+
+<!-- ============ AUDIO WORKLET (όλος ο ήχος τρέχει εδώ, sample-accurate) ============ -->
+<script type="text/worklet" id="workletSrc">
+const MAXS = 8;
+class TabSlicer extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.p = { bpm: 120, div: 4, gate: 1, change: 1, rest: 0, click: false, lenBars: 0 };
+    this.active = new Array(MAXS).fill(false);
+    this.playing = false;
+    this.tick = -1; this.pos = 0; this.spt = 1;
+    this.stepPos = 0; this.gateLen = 1e12; this.cur = -1;
+    this.g = new Float32Array(MAXS);
+    this.inc = 1 / (0.003 * sampleRate);           // 3 ms fades: χωρίς κλικ
+    this.rec = 0; this.stopReq = false; this.bars = 0; // rec: 0 idle, 1 armed, 2 recording
+    this.chunk = 16384; this.bufL = new Float32Array(this.chunk); this.bufR = new Float32Array(this.chunk); this.fill = 0;
+    this.clickEnv = 0; this.clickPh = 0; this.clickFreq = 1000; this.clickDecay = Math.exp(-1 / (0.018 * sampleRate));
+    this.port.onmessage = e => this.onMsg(e.data);
+  }
+  onMsg(d) {
+    switch (d.type) {
+      case 'params': Object.assign(this.p, d.p); break;
+      case 'active':
+        this.active = d.active;
+        if (this.cur >= 0 && !this.active[this.cur]) this.cur = -1;
+        break;
+      case 'play': this.playing = true; this.tick = -1; this.pos = 1e12; break;
+      case 'stop':
+        if (this.rec === 2) this.finishRec();
+        if (this.rec === 1) this.port.postMessage({ type: 'disarmed' });
+        this.rec = 0; this.playing = false; this.cur = -1; this.g.fill(0);
+        this.port.postMessage({ type: 'stopped' });
+        break;
+      case 'arm': this.rec = 1; this.stopReq = false; this.port.postMessage({ type: 'armed' }); break;
+      case 'recStop':
+        if (this.rec === 1) { this.rec = 0; this.port.postMessage({ type: 'disarmed' }); }
+        else if (this.rec === 2) this.stopReq = true;
+        break;
+    }
+  }
+  pick() {
+    const list = [];
+    for (let i = 0; i < MAXS; i++) if (this.active[i]) list.push(i);
+    if (!list.length) return -1;
+    if (Math.random() < this.p.rest) return -1;
+    if (this.cur >= 0 && this.active[this.cur] && Math.random() >= this.p.change) return this.cur;
+    const opts = list.length > 1 && this.cur >= 0 ? list.filter(i => i !== this.cur) : list;
+    return opts[(Math.random() * opts.length) | 0];
+  }
+  flush() {
+    if (!this.fill) return;
+    const L = this.bufL.slice(0, this.fill), R = this.bufR.slice(0, this.fill);
+    this.port.postMessage({ type: 'audio', L, R }, [L.buffer, R.buffer]);
+    this.fill = 0;
+  }
+  finishRec() { this.flush(); this.rec = 0; this.port.postMessage({ type: 'recDone', bars: this.bars }); }
+  onTick() {
+    const t = ++this.tick, t16 = t % 16;
+    if (t16 === 0) {                                        // αρχή μέτρου
+      if (this.rec === 2) {
+        this.bars++;
+        if (this.stopReq || (this.p.lenBars > 0 && this.bars >= this.p.lenBars)) this.finishRec();
+      }
+      if (this.rec === 1) { this.rec = 2; this.bars = 0; this.stopReq = false; this.fill = 0; this.port.postMessage({ type: 'recStart' }); }
+    }
+    const tps = 16 / this.p.div;                            // 16άκια ανά κομμάτι
+    let src = null;
+    if (t % tps === 0) {
+      this.cur = this.pick();
+      this.stepPos = 0;
+      this.gateLen = this.p.gate >= 0.999 ? 1e12 : this.spt * tps * this.p.gate;
+      src = this.cur;
+    }
+    this.port.postMessage({ type: 'tick', t16, src, bars: this.rec === 2 ? this.bars : -1 });
+    if (this.p.click && t % 4 === 0) { this.clickEnv = 1; this.clickPh = 0; this.clickFreq = t16 === 0 ? 1760 : 1100; }
+  }
+  process(inputs, outputs) {
+    const out = outputs[0], ck = outputs[1];
+    const oL = out[0], oR = out[1] || out[0], cL = ck[0], cR = ck[1] || ck[0];
+    const n = oL.length;
+    if (!this.playing) return true;
+    this.spt = sampleRate * 60 / this.p.bpm / 4;            // samples ανά 16άκι
+    for (let s = 0; s < n; s++) {
+      if (this.pos >= this.spt) { this.pos -= this.spt; if (this.pos >= this.spt) this.pos = 0; this.onTick(); }
+      const open = this.stepPos < this.gateLen;
+      let l = 0, r = 0;
+      for (let i = 0; i < MAXS; i++) {
+        const tgt = (i === this.cur && open) ? 1 : 0;
+        let g = this.g[i];
+        if (g !== tgt) {
+          g += tgt > g ? this.inc : -this.inc;
+          if ((tgt === 1 && g > 1) || (tgt === 0 && g < 0)) g = tgt;
+          this.g[i] = g;
+        }
+        if (g > 0) {
+          const inp = inputs[i];
+          if (inp && inp.length) { const a = inp[0], b = inp[1] || inp[0]; l += a[s] * g; r += b[s] * g; }
+        }
+      }
+      oL[s] = l; oR[s] = r;
+      if (this.rec === 2) { this.bufL[this.fill] = l; this.bufR[this.fill] = r; if (++this.fill === this.chunk) this.flush(); }
+      if (this.clickEnv > 0.0005) {
+        const v = Math.sin(this.clickPh) * this.clickEnv * 0.3;
+        this.clickPh += 2 * Math.PI * this.clickFreq / sampleRate; this.clickEnv *= this.clickDecay;
+        cL[s] = v; cR[s] = v;
+      }
+      this.pos++; this.stepPos++;
+    }
+    return true;
+  }
+}
+registerProcessor('tab-slicer', TabSlicer);
+</script>
+
+<!-- ============ DECK MODE: ίδιο αρχείο, ανοίγει ως ?deck=VIDEO_ID ============ -->
+<script>
+window.__IS_DECK = new URLSearchParams(location.search).has('deck');
+if (window.__IS_DECK) (function () {
+  const q = new URLSearchParams(location.search);
+  const vid = q.get('deck'), n = q.get('n') || '?', start = Math.max(0, parseInt(q.get('t') || '0', 10) || 0);
+  document.title = 'DECK ' + n;
+  document.body.className = 'deckpage';
+  document.body.innerHTML =
+    '<div class="deckbar"><b>DECK ' + n + '</b><span id="dTitle">φορτώνει…</span><span class="hint" id="dHint">Πάτα ▶ μία φορά εδώ και γύρνα στο Tab Slicer</span></div>' +
+    '<div class="deckwrap"><div id="player"></div></div>';
+  const $t = document.getElementById('dTitle'), $h = document.getElementById('dHint');
+  const send = m => { try { if (window.opener) window.opener.postMessage(Object.assign({ __tabslicer: 1, deck: +n }, m), '*'); } catch (e) {} };
+  let player = null, primed = false;
+
+  const s = document.createElement('script');
+  s.src = 'https://www.youtube.com/iframe_api';
+  s.onerror = () => { $t.textContent = 'Δεν φόρτωσε το YouTube'; send({ type: 'error', code: 'api' }); };
+  document.head.appendChild(s);
+
+  window.onYouTubeIframeAPIReady = () => {
+    player = new YT.Player('player', {
+      videoId: vid, width: '100%', height: '100%',
+      playerVars: { playsinline: 1, rel: 0, start, origin: location.origin !== 'null' ? location.origin : undefined },
+      events: {
+        onReady: () => {
+          const t = (player.getVideoData && player.getVideoData().title) || vid;
+          document.title = 'DECK ' + n + ' — ' + t; $t.textContent = t;
+          send({ type: 'ready', title: t });
+        },
+        onStateChange: e => {
+          if (e.data === 1 && !primed) { primed = true; $h.textContent = '✓ Έτοιμο — ο έλεγχος γίνεται από το Tab Slicer'; $h.style.color = '#4cd964'; }
+          send({ type: 'state', state: e.data });
+        },
+        onError: e => {
+          const msg = { 2: 'Λάθος link', 5: 'Σφάλμα player', 100: 'Το βίντεο δεν υπάρχει', 101: 'Δεν επιτρέπει embed', 150: 'Δεν επιτρέπει embed', 153: 'Χρειάζεται https/localhost' }[e.data] || ('Σφάλμα ' + e.data);
+          $h.textContent = msg; $h.style.color = '#ff3b30';
+          send({ type: 'error', code: e.data, msg });
+        }
+      }
+    });
+  };
+
+  window.addEventListener('message', e => {
+    const d = e.data || {};
+    if (!d.__tabslicer || !player || !player.playVideo) return;
+    if (d.cmd === 'play') player.playVideo();
+    else if (d.cmd === 'pause') player.pauseVideo();
+    else if (d.cmd === 'ping') send({ type: 'state', state: player.getPlayerState() });
+  });
+  window.addEventListener('pagehide', () => send({ type: 'closed' }));
+})();
+</script>
+
+<!-- ============ UI ============ -->
+<script>
+if (!window.__IS_DECK) (function () {
+const MAXS = 8;
+const COLORS = ['#ff6a1f','#3fa9ff','#4cd964','#ffcc00','#c86bff','#ff4f8b','#2fe0c8','#e8e8e8'];
+const $ = id => document.getElementById(id);
+
+// ---------- state ----------
+const P = { bpm: 120, div: 4, gate: 1, change: 1, rest: 0, click: false, lenBars: 0 };
+try { Object.assign(P, JSON.parse(localStorage.getItem('tabslicer') || '{}')); } catch (e) {}
+const save = () => { try { localStorage.setItem('tabslicer', JSON.stringify(P)); } catch (e) {} };
+
+let ctx = null, node = null, monGain = null, starting = null;
+const sources = new Array(MAXS).fill(null);
+let playing = false, recState = 'idle', recChunks = [], recFrames = 0, takeN = 0;
+
+// ---------- audio ----------
+function ensureAudio() {
+  if (starting) return starting;
+  starting = (async () => {
+    ctx = new AudioContext({ latencyHint: 'interactive' });
+    const code = $('workletSrc').textContent;
+    try {          // blob URL (https) — σε file:// το Chrome θέλει data URL
+      await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([code], { type: 'application/javascript' })));
+    } catch (e) {
+      await ctx.audioWorklet.addModule('data:application/javascript;charset=utf-8,' + encodeURIComponent(code));
+    }
+    node = new AudioWorkletNode(ctx, 'tab-slicer', {
+      numberOfInputs: MAXS, numberOfOutputs: 2, outputChannelCount: [2, 2],
+      channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers'
+    });
+    monGain = ctx.createGain();
+    monGain.gain.value = $('btnMon').classList.contains('on') ? 1 : 0;
+    node.connect(monGain, 0); monGain.connect(ctx.destination);
+    node.connect(ctx.destination, 1);                       // click: ακούγεται, δεν γράφεται
+    node.port.onmessage = e => onWorklet(e.data);
+    sendParams(); sendActive();
+  })();
+  return starting;
+}
+const sendParams = () => { save(); if (node) node.port.postMessage({ type: 'params', p: P }); };
+const sendActive = () => { if (node) node.port.postMessage({ type: 'active', active: sources.map(Boolean) }); };
+
+// ---------- messages from worklet ----------
+function onWorklet(d) {
+  switch (d.type) {
+    case 'tick': drawTick(d); break;
+    case 'audio': recChunks.push([d.L, d.R]); recFrames += d.L.length; break;
+    case 'armed': setRec('armed'); break;
+    case 'disarmed': setRec('idle'); break;
+    case 'recStart': recChunks = []; recFrames = 0; setRec('rec'); break;
+    case 'recDone': finishTake(d.bars); setRec('idle'); stopTransport(); break;   // τέλος εγγραφής → σταματούν όλα
+    case 'stopped': setPlay(false); clearSteps(); break;
+  }
+}
+
+// ---------- step display ----------
+const stepEls = [];
+for (let i = 0; i < 16; i++) { const e = document.createElement('i'); $('steps').appendChild(e); stepEls.push(e); }
+let lastStep = null, curSrc = -1;
+function drawTick(d) {
+  if (d.src !== null) {
+    curSrc = d.src;
+    document.querySelectorAll('.src').forEach(el => el.classList.toggle('on', +el.dataset.slot === curSrc));
+    if (curSrc >= 0 && sources[curSrc]) { sources[curSrc].hits++; const h = document.querySelector(`.src[data-slot="${curSrc}"] .hits`); if (h) h.textContent = sources[curSrc].hits + ' κομμάτια'; }
+  }
+  if (lastStep) lastStep.classList.remove('now');
+  const e = stepEls[d.t16];
+  e.style.setProperty('--c', curSrc >= 0 ? COLORS[curSrc] : '#444');
+  e.classList.add('now'); lastStep = e;
+  if (d.bars >= 0) updateRecStatus(d.bars);
+}
+function clearSteps() {
+  if (lastStep) lastStep.classList.remove('now'); lastStep = null; curSrc = -1;
+  document.querySelectorAll('.src.on').forEach(el => el.classList.remove('on'));
+}
+
+// ---------- transport ----------
+let busy = false;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// Play σε όλα τα DECK, περιμένει να ξεκινήσουν, μετά ξεκινά ο sequencer
+async function startTransport() {
+  await ensureAudio(); await ctx.resume();
+  if (!sources.some(Boolean)) toast('Άνοιξε ένα YouTube και πάτα «Σύνδεση ήχου».');
+  const ds = liveDecks().filter(d => d.slot != null);
+  deckCmd('play');
+  if (ds.length) {
+    const t0 = performance.now();
+    while (performance.now() - t0 < 2500 && !ds.every(d => d.state === 1)) await sleep(40);
+    const stuck = ds.filter(d => d.state !== 1);
+    if (stuck.length) toast('Δεν ξεκίνησε: ' + stuck.map(d => 'DECK ' + d.id).join(', ') + '. Πάτα ▶ μία φορά μέσα σε αυτό το tab.');
+  }
+  node.port.postMessage({ type: 'play' }); setPlay(true);
+}
+function stopTransport() {
+  if (node) node.port.postMessage({ type: 'stop' });
+  deckCmd('pause');
+}
+
+async function togglePlay() {
+  if (busy) return; busy = true;
+  try { if (playing) stopTransport(); else await startTransport(); }
+  finally { busy = false; }
+}
+function setPlay(on) { playing = on; const b = $('btnPlay'); b.classList.toggle('on', on); b.textContent = on ? '■ STOP' : '▶ PLAY'; }
+
+async function toggleRec() {
+  if (busy) return; busy = true;
+  try {
+    await ensureAudio(); await ctx.resume();
+    if (recState === 'idle') {
+      if (!playing) await startTransport();
+      node.port.postMessage({ type: 'arm' });
+    } else node.port.postMessage({ type: 'recStop' });
+  } finally { busy = false; }
+}
+function setRec(s) {
+  recState = s;
+  const b = $('btnRec'), st = $('recStatus');
+  b.classList.toggle('armed', s === 'armed'); b.classList.toggle('on', s === 'rec');
+  b.textContent = s === 'rec' ? '■ STOP REC' : '● REC';
+  st.classList.toggle('rec', s !== 'idle');
+  st.textContent = s === 'armed' ? 'Ξεκινά στο επόμενο μέτρο…' : s === 'rec' ? '● REC 0:00 · 0 μέτρα' : '';
+}
+function updateRecStatus(bars) {
+  if (recState !== 'rec' || !ctx) return;
+  const sec = Math.floor(recFrames / ctx.sampleRate);
+  const len = P.lenBars ? ` / ${P.lenBars}` : '';
+  $('recStatus').textContent = `● REC ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')} · ${bars}${len} μέτρα`;
+}
+
+// ---------- takes / WAV ----------
+function finishTake(bars) {
+  if (!recFrames) return;
+  const blob = encodeWav(recChunks, recFrames, ctx.sampleRate);
+  recChunks = [];
+  const url = URL.createObjectURL(blob);
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  const name = `TabSlicer_${Math.round(P.bpm)}bpm_${bars}bars_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.wav`;
+  const secs = recFrames / ctx.sampleRate;
+
+  const wrap = $('takes');
+  if (!takeN) wrap.innerHTML = '';
+  takeN++;
+  const row = document.createElement('div'); row.className = 'take';
+  const meta = document.createElement('div'); meta.className = 'meta mono';
+  meta.textContent = `#${takeN} · ${Math.round(P.bpm)} BPM · ${bars} μέτρα · ${secs.toFixed(1)}s`;
+  const au = document.createElement('audio'); au.controls = true; au.src = url;
+  const a = document.createElement('a'); a.href = url; a.download = name; a.textContent = '⬇ WAV';
+  row.append(meta, au, a);
+  wrap.prepend(row);
+  a.click();
+}
+
+function encodeWav(chunks, frames, rate) {
+  const B = 3, ch = 2, dataLen = frames * ch * B;
+  const buf = new ArrayBuffer(44 + dataLen), v = new DataView(buf), u8 = new Uint8Array(buf);
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) u8[o + i] = s.charCodeAt(i); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + dataLen, true); str(8, 'WAVE');
+  str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, ch, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * ch * B, true); v.setUint16(32, ch * B, true); v.setUint16(34, 24, true);
+  str(36, 'data'); v.setUint32(40, dataLen, true);
+  let o = 44;
+  const put = x => {
+    x = x > 1 ? 1 : x < -1 ? -1 : x;
+    let n = Math.round(x < 0 ? x * 0x800000 : x * 0x7FFFFF);
+    if (n < 0) n += 0x1000000;
+    u8[o] = n & 255; u8[o + 1] = (n >> 8) & 255; u8[o + 2] = (n >> 16) & 255; o += 3;
+  };
+  for (const [L, R] of chunks) for (let i = 0; i < L.length; i++) { put(L[i]); put(R[i]); }
+  return new Blob([buf], { type: 'audio/wav' });
+}
+
+// ---------- YouTube decks ----------
+const decks = new Map();   // id -> { id, win, vid, title, state, slot, err }
+let deckSeq = 0;
+const liveDecks = () => [...decks.values()].filter(d => d.win && !d.win.closed);
+function deckCmd(cmd) { liveDecks().forEach(d => { try { d.win.postMessage({ __tabslicer: 1, cmd }, '*'); } catch (e) {} }); }
+
+function parseYouTube(str) {
+  str = (str || '').trim();
+  if (/^[\w-]{11}$/.test(str)) return { vid: str, t: 0 };
+  let u; try { u = new URL(str.startsWith('http') ? str : 'https://' + str); } catch (e) { return null; }
+  let vid = null;
+  if (/youtu\.be$/.test(u.hostname)) vid = u.pathname.slice(1, 12);
+  else if (/youtube\.com$|youtube-nocookie\.com$/.test(u.hostname)) {
+    vid = u.searchParams.get('v');
+    const m = u.pathname.match(/\/(shorts|embed|live|v)\/([\w-]{11})/);
+    if (!vid && m) vid = m[2];
+  }
+  if (!vid || !/^[\w-]{11}$/.test(vid)) return null;
+  const ts = u.searchParams.get('t') || u.searchParams.get('start') || '0';
+  const mm = ts.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/);
+  const t = mm ? (+(mm[1] || 0)) * 3600 + (+(mm[2] || 0)) * 60 + (+(mm[3] || 0)) : 0;
+  return { vid, t };
+}
+
+function openDeck() {
+  const r = parseYouTube($('ytUrl').value);
+  if (!r) { toast('Δεν αναγνωρίστηκε YouTube link.'); return; }
+  if (sources.filter(Boolean).length + [...decks.values()].filter(d => d.slot == null).length >= MAXS) { toast('Έως 8 πηγές.'); return; }
+  const id = ++deckSeq;
+  const base = location.href.split('#')[0].split('?')[0];
+  const win = window.open(`${base}?deck=${r.vid}&n=${id}&t=${r.t}`, 'tabslicer_deck_' + id);
+  if (!win) { toast('Ο Chrome μπλόκαρε το νέο tab. Επίτρεψε pop-ups για αυτή τη σελίδα.'); return; }
+  decks.set(id, { id, win, vid: r.vid, title: r.vid, state: null, slot: null, err: null });
+  $('ytUrl').value = '';
+  renderSources();
+}
+
+function closeDeck(id) {
+  const d = decks.get(id); if (!d) return;
+  if (d.slot != null) removeSource(d.slot, true);
+  try { if (d.win && !d.win.closed) d.win.close(); } catch (e) {}
+  decks.delete(id);
+  renderSources();
+}
+
+window.addEventListener('message', e => {
+  const m = e.data || {};
+  if (!m.__tabslicer || !m.deck) return;
+  const d = decks.get(m.deck); if (!d || e.source !== d.win) return;
+  if (m.type === 'ready') { d.title = m.title; d.err = null; if (d.slot != null && sources[d.slot] && sources[d.slot].autoName) { sources[d.slot].name = 'D' + d.id + ' · ' + m.title; } renderSources(); }
+  else if (m.type === 'state') { d.state = m.state; updateDeckState(d); }
+  else if (m.type === 'error') { d.err = m.msg || 'Σφάλμα'; updateDeckState(d); }
+  else if (m.type === 'closed') setTimeout(() => { if (d.win && d.win.closed) closeDeck(d.id); }, 300);
+});
+setInterval(() => { for (const d of decks.values()) if (!d.win || d.win.closed) closeDeck(d.id); }, 1500);
+
+const STATE_TXT = { '-1': 'φορτώθηκε — πάτα ▶ μία φορά μέσα του', 0: 'τέλος βίντεο', 1: '▶ παίζει', 2: '❚❚ παύση', 3: 'φορτώνει…', 5: 'έτοιμο — πάτα ▶ μία φορά μέσα του' };
+function deckStateText(d) { return d.err ? d.err : d.state == null ? 'ανοίγει…' : (STATE_TXT[d.state] || ''); }
+function updateDeckState(d) {
+  const el = document.getElementById('dst-' + d.id); if (!el) return;
+  el.textContent = 'DECK ' + d.id + ' · ' + deckStateText(d);
+  el.classList.toggle('err', !!d.err);
+}
+
+// ---------- sources ----------
+async function addSource(deckId) {
+  const slot = sources.findIndex(s => !s);
+  if (slot < 0) { toast('Έως 8 πηγές.'); return; }
+  await ensureAudio(); await ctx.resume();
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { displaySurface: 'browser', frameRate: 1, width: 320 },
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false,
+               suppressLocalAudioPlayback: $('chkMute').checked },
+      preferCurrentTab: false, selfBrowserSurface: 'exclude', surfaceSwitching: 'include', systemAudio: 'include'
+    });
+  } catch (e) {
+    if (e.name !== 'NotAllowedError') toast('Σφάλμα: ' + e.message);
+    return;
+  }
+  const at = stream.getAudioTracks();
+  if (!at.length) {
+    stream.getTracks().forEach(t => t.stop());
+    toast('Δεν ήρθε ήχος. Τσέκαρε «Also share tab audio».');
+    return;
+  }
+  const src = ctx.createMediaStreamSource(new MediaStream(at));
+  src.connect(node, 0, slot);
+  const an = ctx.createAnalyser(); an.fftSize = 512; src.connect(an);
+  const d = deckId != null ? decks.get(deckId) : null;
+  sources[slot] = { stream, src, an, hits: 0, buf: new Float32Array(512), deckId: d ? d.id : null,
+                    name: d ? 'D' + d.id + ' · ' + d.title : 'Tab ' + (slot + 1), autoName: true };
+  if (d) d.slot = slot;
+  at[0].addEventListener('ended', () => removeSource(slot));
+  renderSources(); sendActive();
+}
+
+// Αποσυνδέει τον ήχο· το DECK μένει ανοιχτό και μπορείς να το ξανασυνδέσεις
+function removeSource(slot, fromDeckClose) {
+  const s = sources[slot]; if (!s) return;
+  try { s.src.disconnect(); } catch (e) {}
+  s.stream.getTracks().forEach(t => t.stop());
+  if (s.deckId != null && decks.has(s.deckId)) decks.get(s.deckId).slot = null;
+  sources[slot] = null;
+  if (!fromDeckClose) renderSources();
+  sendActive();
+}
+
+function renderSources() {
+  const g = $('srcGrid'); g.innerHTML = '';
+  const pending = [...decks.values()].filter(d => d.slot == null);
+  if (!sources.some(Boolean) && !pending.length) {
+    g.innerHTML = '<div class="empty" style="grid-column:1/-1">Επικόλλησε ένα YouTube link και πάτα <b>Άνοιγμα</b>.</div>';
+    return;
+  }
+  sources.forEach((s, i) => {
+    if (!s) return;
+    const d = s.deckId != null ? decks.get(s.deckId) : null;
+    const el = document.createElement('div');
+    el.className = 'src' + (i === curSrc ? ' on' : ''); el.dataset.slot = i; el.style.setProperty('--c', COLORS[i]);
+    el.innerHTML = `<div class="top"><span class="dot"></span><input value=""><button class="x" title="${d ? 'Κλείσιμο DECK' : 'Αφαίρεση'}">×</button></div>
+                    <div class="m"><b></b></div><div class="hits">${s.hits} κομμάτια</div>
+                    <div class="st" ${d ? `id="dst-${d.id}"` : ''}>${d ? '' : 'εξωτερικό tab · play/pause χειροκίνητα'}</div>`;
+    const inp = el.querySelector('input'); inp.value = s.name; inp.oninput = () => { s.name = inp.value; s.autoName = false; };
+    el.querySelector('.x').onclick = () => d ? closeDeck(d.id) : removeSource(i);
+    s.meter = el.querySelector('.m b');
+    g.appendChild(el);
+    if (d) updateDeckState(d);
+  });
+  pending.forEach(d => {
+    const el = document.createElement('div');
+    el.className = 'src pending'; el.style.setProperty('--c', '#555');
+    el.innerHTML = `<div class="top"><span class="dot"></span><input readonly><button class="x" title="Κλείσιμο DECK">×</button></div>
+                    <div class="st" id="dst-${d.id}"></div>
+                    <button class="connect">🔊 Σύνδεση ήχου</button>`;
+    el.querySelector('input').value = 'D' + d.id + ' · ' + d.title;
+    el.querySelector('.x').onclick = () => closeDeck(d.id);
+    el.querySelector('.connect').onclick = () => { toast('Διάλεξε το tab «DECK ' + d.id + ' — …» και τσέκαρε «Also share tab audio».'); addSource(d.id); };
+    g.appendChild(el);
+    updateDeckState(d);
+  });
+}
+
+function meters() {
+  for (const s of sources) {
+    if (!s || !s.meter) continue;
+    s.an.getFloatTimeDomainData(s.buf);
+    let sum = 0; for (let i = 0; i < s.buf.length; i++) sum += s.buf[i] * s.buf[i];
+    const db = 20 * Math.log10(Math.sqrt(sum / s.buf.length) + 1e-9);
+    s.meter.style.width = Math.max(0, Math.min(100, (db + 60) / 60 * 100)) + '%';
+  }
+  requestAnimationFrame(meters);
+}
+requestAnimationFrame(meters);
+
+// ---------- knobs ----------
+function makeKnob(el, o) {
+  const NS = 'http://www.w3.org/2000/svg', A0 = -135, A1 = 135;
+  el.innerHTML = `<svg viewBox="0 0 100 100"><path class="track" fill="none" stroke-width="7" stroke-linecap="round"/>
+    <path class="arc" fill="none" stroke-width="7" stroke-linecap="round"/><circle class="cap" cx="50" cy="50" r="30" stroke-width="2"/>
+    <line class="ptr" x1="50" y1="50" x2="50" y2="26" stroke-width="3.5" stroke-linecap="round"/></svg>
+    <div class="val mono"></div><div class="label">${o.label}</div>`;
+  const [track, arc] = el.querySelectorAll('path'), ptr = el.querySelector('line'), val = el.querySelector('.val');
+  const pt = a => { const r = (a - 90) * Math.PI / 180; return [50 + 42 * Math.cos(r), 50 + 42 * Math.sin(r)]; };
+  const path = (a, b) => { const [x0, y0] = pt(a), [x1, y1] = pt(b); return `M${x0} ${y0} A42 42 0 ${b - a > 180 ? 1 : 0} 1 ${x1} ${y1}`; };
+  track.setAttribute('d', path(A0, A1));
+  let v = o.value;
+  const set = (nv, emit = true) => {
+    nv = Math.min(o.max, Math.max(o.min, nv));
+    nv = Math.round(nv / o.step) * o.step;
+    v = +nv.toFixed(4);
+    const t = (v - o.min) / (o.max - o.min), a = A0 + t * (A1 - A0);
+    arc.setAttribute('d', t > 0.001 ? path(A0, a) : '');
+    ptr.setAttribute('transform', `rotate(${a} 50 50)`);
+    val.textContent = o.fmt(v);
+    if (emit) o.onChange(v);
+  };
+  let y0 = 0, v0 = 0;
+  el.addEventListener('pointerdown', e => { el.setPointerCapture(e.pointerId); y0 = e.clientY; v0 = v; el.focus(); });
+  el.addEventListener('pointermove', e => {
+    if (!el.hasPointerCapture(e.pointerId)) return;
+    const range = o.max - o.min, sens = e.shiftKey ? 1200 : 220;
+    set(v0 + (y0 - e.clientY) / sens * range);
+  });
+  el.addEventListener('wheel', e => { e.preventDefault(); set(v + (e.deltaY < 0 ? 1 : -1) * (e.shiftKey ? o.step : o.coarse)); }, { passive: false });
+  el.addEventListener('dblclick', () => set(o.def));
+  el.addEventListener('keydown', e => {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { set(v + (e.shiftKey ? o.step : o.coarse)); e.preventDefault(); e.stopPropagation(); }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { set(v - (e.shiftKey ? o.step : o.coarse)); e.preventDefault(); e.stopPropagation(); }
+  });
+  set(v, false);
+  return { set };
+}
+const pct = v => Math.round(v * 100) + '%';
+const kBpm = makeKnob($('kBpm'), { label: 'BPM', min: 40, max: 240, step: 1, coarse: 1, def: 120, value: P.bpm, fmt: v => v.toFixed(0), onChange: v => { P.bpm = v; sendParams(); } });
+makeKnob($('kGate'),   { label: 'Gate',   min: 0.05, max: 1,   step: 0.01, coarse: 0.05, def: 1, value: P.gate,   fmt: pct, onChange: v => { P.gate = v; sendParams(); } });
+makeKnob($('kChange'), { label: 'Change', min: 0,    max: 1,   step: 0.01, coarse: 0.05, def: 1, value: P.change, fmt: pct, onChange: v => { P.change = v; sendParams(); } });
+makeKnob($('kRest'),   { label: 'Rest',   min: 0,    max: 0.8, step: 0.01, coarse: 0.05, def: 0, value: P.rest,   fmt: pct, onChange: v => { P.rest = v; sendParams(); } });
+
+// ---------- other controls ----------
+document.querySelectorAll('#segDiv button').forEach(b => {
+  b.classList.toggle('on', +b.dataset.v === P.div);
+  b.onclick = () => { P.div = +b.dataset.v; document.querySelectorAll('#segDiv button').forEach(x => x.classList.toggle('on', x === b)); sendParams(); };
+});
+$('btnClick').classList.toggle('on', P.click);
+$('btnClick').onclick = () => { P.click = !P.click; $('btnClick').classList.toggle('on', P.click); sendParams(); };
+$('btnMon').onclick = () => { const on = $('btnMon').classList.toggle('on'); if (monGain) monGain.gain.setTargetAtTime(on ? 1 : 0, ctx.currentTime, 0.01); };
+$('selLen').value = String(P.lenBars);
+$('selLen').onchange = () => { P.lenBars = +$('selLen').value; sendParams(); };
+$('btnPlay').onclick = togglePlay;
+$('btnRec').onclick = toggleRec;
+$('btnAdd').onclick = () => addSource();
+$('btnOpen').onclick = openDeck;
+$('ytUrl').addEventListener('keydown', e => { if (e.key === 'Enter') openDeck(); });
+$('fileBanner').hidden = location.protocol !== 'file:';
+
+let taps = [];
+function tap() {
+  const t = performance.now();
+  if (taps.length && t - taps[taps.length - 1] > 2000) taps = [];
+  taps.push(t); if (taps.length > 5) taps.shift();
+  if (taps.length >= 2) {
+    const avg = (taps[taps.length - 1] - taps[0]) / (taps.length - 1);
+    kBpm.set(Math.round(60000 / avg));
+  }
+}
+$('btnTap').onclick = tap;
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.metaKey || e.ctrlKey) return;
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+  else if (e.key === 'r' || e.key === 'R' || e.key === 'ρ') toggleRec();
+  else if (e.key === 't' || e.key === 'T' || e.key === 'τ') tap();
+});
+
+let toastT;
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 3200); }
+
+if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) toast('Άνοιξέ το στο Google Chrome.');
+renderSources();
+
+// Debug: test tone ως πηγή (από την κονσόλα): __testSource(220)
+window.__testSource = async (freq = 220) => {
+  await ensureAudio(); await ctx.resume();
+  const slot = sources.findIndex(s => !s); if (slot < 0) return;
+  const osc = ctx.createOscillator(); osc.frequency.value = freq; osc.type = 'sawtooth';
+  const g = ctx.createGain(); g.gain.value = 0.2; osc.connect(g); osc.start();
+  const an = ctx.createAnalyser(); an.fftSize = 512; g.connect(an);
+  g.connect(node, 0, slot);
+  sources[slot] = { stream: { getTracks: () => [{ stop: () => osc.stop() }] }, src: g, an, name: 'Test ' + freq + 'Hz', hits: 0, buf: new Float32Array(512) };
+  renderSources(); sendActive();
+};
+})();
+</script>
+</body>
+</html>
